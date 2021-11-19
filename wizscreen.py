@@ -215,7 +215,7 @@ def parse_args():
 	parser.add_argument('-r',
 						'--rate',
 						type=int,
-						default=2,
+						default=20,
 						help='refresh rate of color change (hz)')
 	parser.add_argument('-m',
 						'--monitor',
