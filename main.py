@@ -1,12 +1,12 @@
 import time
 import asyncio
-import json
-import os
 import io
 from functools import reduce
 from typing import Any, Callable, ClassVar, Dict, Optional
 import argparse
 import math
+import logging
+import sys
 
 import mss
 import mss.tools
@@ -14,8 +14,6 @@ import numpy as np
 from pywizlight import wizlight, PilotBuilder, discovery
 from colorthief import ColorThief
 from PIL import Image
-
-from timer import Timer
 
 def bgr2rgb(bgr):
 	"""
@@ -67,6 +65,9 @@ def similar(col1, col2):
 	return res2
 
 class ScreenLight():
+	"""
+	Find screen colors and communicate with wiz bulb
+	"""
 	def __init__(self, *args, **kwargs):
 		self.__dict__.update(kwargs)
 
@@ -153,6 +154,7 @@ class ScreenLight():
 
 		prev_time = 0
 
+		print("Press Ctrl+C to quit out the program")
 		while "Screen capturing":
 
 			col = self.grab_color()
@@ -166,19 +168,19 @@ class ScreenLight():
 
 				b, r = self.bulb_scale(col)
 
-				print(f"rgb: {r} \t b: {b}")
+				logging.info(f"rgb: {r} \t b: {b}")
 				# Set bulb to screen color
 				await self.light.turn_on(PilotBuilder(rgb = r, brightness=b))
 
 				prev_col = col
 
 			else:
-				print("Skip!")
+				logging.info("Skipping this iteration")
 
 			# waiting　if necessary. Dont run loop that often
 			cur_time = time.time()
 			if (cur_time - prev_time) < (1/self.rate):
-				print(f"sleeping {1/self.rate - (cur_time - prev_time)}")
+				logging.info(f"sleeping {1/self.rate - (cur_time - prev_time)}")
 				time.sleep(1/self.rate - (cur_time - prev_time))
 
 			prev_time = time.time()
@@ -191,7 +193,7 @@ def parse_args():
 	parser.add_argument('-d',
 						'--debug',
 						action='store_true',
-						help='Prints more verbose messages')
+						help='Prints more verbose messages. Sets to INFO level')
 	parser.add_argument('-s',
 						'--search',
 						action='store_true',
@@ -234,13 +236,14 @@ def parse_args():
 						type=int,
 						default=600,
 						help='Reduce screencapture width to this amount (pixels). Maintains aspect ratio')
-	# Execute the parse_args() method
 	return parser.parse_args()
 
 if __name__ == "__main__":
-	sl = ScreenLight(**vars(parse_args()))
+	args = parse_args()
+	if args.debug:
+		root = logging.getLogger()
+		root.setLevel(logging.INFO)
+	sl = ScreenLight(**vars(args))
 
 	loop = asyncio.get_event_loop()
-
-	# loop.run_until_complete(sl.init_bulb())
 	loop.run_until_complete(sl.exec())
