@@ -7,7 +7,6 @@ name = "pypi"
 pywizlight = "*"
 mss = "*"
 numpy = "*"
-opencv-python = "==4.5.3.56"
 colorthief = "*"
 
 [dev-packages]
