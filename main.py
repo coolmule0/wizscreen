@@ -67,66 +67,47 @@ def similar(col1, col2):
 	return res2
 
 class ScreenLight():
-	# which screen monitor to use
-	monitor_number = 1
+	def __init__(self, *args, **kwargs):
+		self.__dict__.update(kwargs)
 
-	# file to store settings
-	setfile = 'settings.json'
-	# The settings
-	settings = {}
 
-	# never go below this brightness (0-255)
-	min_brightness = 70
-	
-	# dominant color quality (1-best, 10-worst)
-	quality = 1
+	async def search_bulbs(self):
+		"""
+		Find any bulbs on the broadcast space
+		"""
+		bulbs = await discovery.discover_lights(broadcast_space=self.broadcast_space)
 
-	# refresh rate (hz)
-	rate = 5
+		# Iterate over all returned bulbs
+		for bulb in bulbs:
+			print(bulb.__dict__)
 
-	# percentage of screen to examine (from center) (0-100)
-	screen_per = 60
-
-	# Reduce screencapture width to this (pixels). Maintains aspect ratio
-	redu_width = 600 
 
 	async def init_bulb(self):
 		"""
 		Find and use relevant bulb
 		"""
-		if getattr(self, "bulb_ip", None):
-			self.light = wizlight(self.settings.bulb_ip)
-		elif os.path.isfile(self.setfile):
-			with open(self.setfile, 'r') as myfile:
-				data=myfile.read()
-				self.settings = json.loads(data)
-		else:
-			bulbs = await discovery.discover_lights(broadcast_space="192.168.1.255")
-			# Print the IP address of the bulb on index 0
-			print(f"Bulb IP address: {bulbs[0].ip}")
+		if not getattr(self, "ip", None):
+			bulbs = await discovery.discover_lights(broadcast_space=self.broadcast_space)
 
 			# Iterate over all returned bulbs
 			for bulb in bulbs:
 				print(bulb.__dict__)
 
 			# Set up a standard light - use first found
-			#save ip for ease of future use
-			self.settings["bulb_ip"] = bulbs[0].ip
-			with open(self.setfile, 'w', encoding="utf-8") as f:
-				json.dump(self.settings, f)
+			self.ip = bulbs[0].ip
+			print(f"Using first light found. Light with IP: {self.ip}")
 
-		self.light = wizlight(self.settings["bulb_ip"])
-		print(f"Using light with IP: {self.settings['bulb_ip']}")
+		self.light = wizlight(self.ip)
 
 	def grab_color(self):
 		"""
 		return float rgb average of screen 
 		"""
 		with mss.mss() as sct:
-			monitor = sct.monitors[self.monitor_number]
+			monitor = sct.monitors[self.monitor]
 
 			# Capture a bbox using percent values
-			len_factor = math.sqrt(self.screen_per)
+			len_factor = math.sqrt(self.screen_percent)
 			border = int((100 - len_factor)/2)
 			left = monitor["left"] + monitor["width"] * border // 100
 			top = monitor["top"] + monitor["height"] * border // 100  
@@ -137,7 +118,7 @@ class ScreenLight():
 			sct_img = sct.grab(bbox)
 			# mss.tools.to_png(sct_img.rgb, sct_img.size, output="screenshot.png")
 
-			return dominat_color(sct_img, self.rate, self.redu_width)
+			return dominant_color(sct_img, self.rate, self.reduced_width)
 			# print(dominat_color(sct_img, 3, redu_width=1080))
 			# return average_color(sct_img)
 
@@ -152,24 +133,27 @@ class ScreenLight():
 		so also consider brightness and scaling colour values
 		"""
 		mx = max(color) if max(color) > 0 else 1
-		brightness = max(color) if max(color) > self.min_brightness else self.min_brightness
+		brightness = max(color) if max(color) > self.brightness else self.brightness
 
 		sf = 255/(max(color))
 		c = [int(sf * c) for c in color]
 		return (brightness, c)
 
-
 	async def exec(self):
 		"""
 		Continually run the program
 		"""
-		prev_time = 0
-		i = 0
+		
+		if self.search:
+			await self.search_bulbs()
+			return
 
-		if not self.light:
-			raise 
-		# while "Screen capturing":
-		while i == 0:
+		if not getattr(self, "light", None):
+			await self.init_bulb()
+
+		prev_time = 0
+
+		while "Screen capturing":
 
 			col = self.grab_color()
 
@@ -198,13 +182,16 @@ class ScreenLight():
 				time.sleep(1/self.rate - (cur_time - prev_time))
 
 			prev_time = time.time()
-			i=i+1
 
 def parse_args():
 	parser = argparse.ArgumentParser(description='Match a Wiz Bulb color to that on screen',
 									formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 	# Add the arguments
+	parser.add_argument('-d',
+						'--debug',
+						action='store_true',
+						help='Prints more verbose messages')
 	parser.add_argument('-s',
 						'--search',
 						action='store_true',
@@ -212,6 +199,10 @@ def parse_args():
 	parser.add_argument('-ip',
 						type=str,
 						help='known IP of bulb to use')
+	parser.add_argument('--broadcast_space',
+						type=str,
+						default="192.168.1.255",
+						help='Search over this space of IP for possible bulbs')
 	parser.add_argument('-b',
 						'--brightness',
 						type=int,
@@ -223,6 +214,11 @@ def parse_args():
 						type=int,
 						default=2,
 						help='refresh rate of color change (hz)')
+	parser.add_argument('-m',
+						'--monitor',
+						type=int,
+						default=1,
+						help='Monitor number to use')
 	parser.add_argument('-q',
 						'--quality',
 						type=int,
@@ -234,25 +230,17 @@ def parse_args():
 						metavar="[1-100]",
 						default=60,
 						help='Amount of screen to consider, in percentage. Chances are that things around the edge of the screen do not need consideration')
-	parser.add_argument('--screen_percesnt',
+	parser.add_argument('--reduced_width',
 						type=int,
 						default=600,
 						help='Reduce screencapture width to this amount (pixels). Maintains aspect ratio')
 	# Execute the parse_args() method
-	args = parser.parse_args()
+	return parser.parse_args()
 
-parse_args()
-sl = ScreenLight()
+if __name__ == "__main__":
+	sl = ScreenLight(**vars(parse_args()))
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(sl.init_bulb())
-loop.run_until_complete(sl.exec())
+	loop = asyncio.get_event_loop()
 
-
-
-
-	# # percentage of screen to examine (from center) (0-100)
-	# screen_per = 60
-
-	# # Reduce screencapture width to this (pixels). Maintains aspect ratio
-	# redu_width = 600 
+	# loop.run_until_complete(sl.init_bulb())
+	loop.run_until_complete(sl.exec())
