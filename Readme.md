@@ -1,6 +1,6 @@
 # WizScreen
 
-Set your Wiz Bulb to match the colors on screen. Finds the dominant on-screen color and requests the bulb change accordingly. Fastest response time on the order of 0.2s from my testing.
+Set your Wiz Bulb to match the colors on screen. Finds the dominant on-screen color and requests the bulb change accordingly. Fastest response time on the order of 0.2s from testing.
 
 ## How to use
 
