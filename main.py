@@ -2,33 +2,45 @@ import time
 import asyncio
 import json
 import os
+import io
 
 from mss import mss
 import numpy as np
 import cv2
 from pywizlight import wizlight, PilotBuilder, discovery
+from colorthief import ColorThief
+from PIL import Image
 
 def bgr2rgb(bgr):
 	"""
 	Converts bgr arrays (such as opencv) to rgb
 	"""
-	rgb = [bgr[2], bgr[1], bgr[0]]
-	return rgb
+	return bgr[::-1]
 
-def average_color(image):
+def average_color(sct_img):
 	"""
 	Returns the average colour of an image. 
-	Input image should be in cv2 BGR format
-	Output in RGB format
+	Input image should be a mss screep capture
+	Output in RGB tuple
 	"""
-	bgr = np.array(image).mean(axis=(0,1))
-	return bgr2rgb(bgr)
+	img = np.array(sct_img)
+	bgr = np.array(img).mean(axis=(0,1))
+	rgb = bgr2rgb(bgr[:3])
+	return tuple([ int(c.item()) for c in rgb])
 
-def dominat_color(image):
+def dominat_color(sct_img, quality=1):
 	"""
 	Returns the dominant colour in an image
 	"""
-	return 
+	img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+
+	with io.BytesIO() as file_object:
+		img.save(file_object, "PNG")
+		cf = ColorThief(file_object)
+		col = cf.get_color()
+
+	return col
+	 
 
 class ScreenLight():
 	# which screen monitor to use
@@ -38,6 +50,15 @@ class ScreenLight():
 	setfile = 'settings.json'
 	# The settings
 	settings = {}
+
+	# never go below this brightness (0-255)
+	min_brightness = 70
+	
+	# dominant color quality (1-best, 10-worst)
+	quality = 1
+
+	# refresh rate (hz)
+	rate = 5
 
 	async def init_bulb(self):
 		"""
@@ -79,9 +100,12 @@ class ScreenLight():
 		"""
 		with mss() as sct:
 			monitor = sct.monitors[self.monitor_number]
-			img = np.array(sct.grab(monitor))
+			sct_img = sct.grab(monitor)
+			
 
-			return average_color(img)
+			return dominat_color(sct_img, self.quality)
+			# return average_color(sct_img)
+
 
 	def bulb_scale(self, color):
 		"""
@@ -92,9 +116,10 @@ class ScreenLight():
 		Details: The rgb=(50,50,50) is the same bulb appearance as (255,255,255),
 		so also consider brightness and scaling colour values
 		"""
-		brightness = max(color)
+		mx = max(color) if max(color) > 0 else 1
+		brightness = max(color) if max(color) > self.min_brightness else self.min_brightness
 
-		sf = 255/max(color)
+		sf = 255/(max(color))
 		c = [int(sf * c) for c in color]
 		return (brightness, c)
 
@@ -104,17 +129,17 @@ class ScreenLight():
 			raise 
 		while "Screen capturing":
 
-			rgb =self.grab_color()
+			col = self.grab_color()
 
-			r = tuple([ int(c.item()) for c in rgb])
+			# r = tuple([ int(c.item()) for c in rgb])
 
-			b, r = self.bulb_scale(r)
+			b, r = self.bulb_scale(col)
 
-			print(f"rgb: {r}")
+			print(f"rgb: {r} \t b: {b}")
 			# Set bulb to screen color
 			await self.light.turn_on(PilotBuilder(rgb = r, brightness=b))
 
-			time.sleep(2)
+			time.sleep(1/self.rate)
 			# # Press "q" to quit
 			# if cv2.waitKey(250) & 0xFF == ord("q"):
 			#     cv2.destroyAllWindows()
