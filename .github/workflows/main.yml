@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-exe:
 
     runs-on: ubuntu-latest
 
@@ -24,5 +24,5 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: name-of-artifact
+        name: wizscreen
         path: ./dist/windows
