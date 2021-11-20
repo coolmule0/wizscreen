@@ -45,6 +45,10 @@ def dominant_color(sct_img, quality=3, redu_width=600):
 		sf = redu_width / img.width
 		img = img.resize((redu_width,int(img.height*sf)), Image.ANTIALIAS)
 
+	# Bug in ColorThief library. Cannot have too white an image.
+	# solution: reduce whitest pixels
+	# ...
+
 	with io.BytesIO() as file_object:
 		img.save(file_object, "PNG")
 		cf = ColorThief(file_object)
@@ -121,7 +125,7 @@ class ScreenLight():
 			sct_img = sct.grab(bbox)
 			# mss.tools.to_png(sct_img.rgb, sct_img.size, output="screenshot.png")
 
-			return dominant_color(sct_img, self.rate, self.reduced_width)
+			return dominant_color(sct_img, self.quality, self.reduced_width)
 			# print(dominat_color(sct_img, 3, redu_width=1080))
 			# return average_color(sct_img)
 
@@ -135,22 +139,24 @@ class ScreenLight():
 		Details: The rgb=(50,50,50) is the same bulb appearance as (255,255,255),
 		so also consider brightness and scaling colour values
 		"""
-		mx = max(color) if max(color) > 0 else 1
+		# mx = max(color) if max(color) > 0 else 1
 		brightness = max(color) if max(color) > self.brightness else self.brightness
 
 		sf = 255/(max(color))
 		c = [int(sf * c) for c in color]
 		return (brightness, c)
 
-	def make_block_img(self, color):
+	def make_block_img(self, color, b_color):
 		"""
-		Creates a small window to display a single color
-		color must be a tuple of RGB
+		Creates a small window to display a 2 - single colors
+		color and b_color must be a tuple of RGB
 		"""
 
-		width = height = 512
+		width = height = 256
 		blank_image = np.zeros((height,width,3), np.uint8)
-		blank_image[:]=(0,124,255)[::-1]
+		blank_image[:,:width//2,:]=(color)[::-1]
+		blank_image[:,width//2:,:]=(b_color)[::-1]
+
 		return blank_image
 
 	async def exec(self):
@@ -183,14 +189,11 @@ class ScreenLight():
 
 				b, r = self.bulb_scale(col)
 
-				logging.info(f"rgb: {r} \t b: {b}")
+				logging.info(f"Dominant screen color: {col} \t Color of bulb: {r} and brightness: {b}")
 				# Set bulb to screen color
 				await self.light.turn_on(PilotBuilder(rgb = r, brightness=b))
 
 				prev_col = col
-
-			else:
-				logging.info("Skipping this iteration")
 
 			# waiting　if necessary. Dont run loop that often
 			cur_time = time.time()
@@ -202,7 +205,7 @@ class ScreenLight():
 
 			# display a block of the proposed light color
 			if self.display:
-				img_blk = self.make_block_img(col)
+				img_blk = self.make_block_img(col, r)
 				cv2.imshow("OpenCV/Numpy normal", img_blk)
 
 				# Press "q" to quit　in CV window
@@ -260,7 +263,7 @@ def parse_args():
 	parser.add_argument('--reduced_width',
 						type=int,
 						default=600,
-						help='Reduce screencapture width to this amount (pixels). Maintains aspect ratio')
+						help='Reduce screencapture width to this amount (pixels). Maintains aspect ratio. Set to screen width or larger to not reduce during computation.')
 	parser.add_argument('-d',
 						'--display',
 						action='store_true',
