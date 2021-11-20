@@ -8,6 +8,7 @@ import math
 import logging
 import sys
 import cv2
+import colorsys
 
 import mss
 import mss.tools
@@ -32,6 +33,19 @@ def average_color(sct_img):
 	bgr = np.array(img).mean(axis=(0,1))
 	rgb = bgr2rgb(bgr[:3])
 	return tuple([ int(c.item()) for c in rgb])
+
+def to_two_channel(rgb):
+	"""
+	Takes rgb and return the nearest color containing a zero in one of the channels. This is format necessary to accurately show colors on the bulb
+	"""
+	rgb_f = [c / 255 for c in rgb]
+	hsv = colorsys.rgb_to_hsv(*rgb_f)
+	# set saturation to max - incorrect way of getting only 2 channels.
+	hsv = (hsv[0], 1, hsv[2])
+
+	rgb_2f = colorsys.hsv_to_rgb(*hsv)
+	rgb_2 = tuple([int(c*255) for c in rgb_2f])
+	return rgb_2
 
 def dominant_color(sct_img, quality=3, redu_width=600):
 	"""
@@ -126,8 +140,17 @@ class ScreenLight():
 			# mss.tools.to_png(sct_img.rgb, sct_img.size, output="screenshot.png")
 
 			return dominant_color(sct_img, self.quality, self.reduced_width)
-			# print(dominat_color(sct_img, 3, redu_width=1080))
-			# return average_color(sct_img)
+	
+	async def print_bulb_info(self):
+		"""
+		Queries the bulb to obtain information from it
+		"""
+		state = await self.light.updateState()
+		red, green, blue = state.get_rgb()
+		brightness = state.get_brightness()
+		if not hasattr(self, 'b_red') or not (red, green, blue, brightness) == (self.b_red, self.b_blue, self.b_green, self.b_brightness):
+			logging.info(f"Bulb values: {red}  {green}   {blue}   \t|  {brightness}")
+			(self.b_red, self.b_blue, self.b_green, self.b_brightness) = (red, green, blue, brightness)
 
 
 	def bulb_scale(self, color):
@@ -135,15 +158,14 @@ class ScreenLight():
 		Map colour to brightness and colour
 		Input of tuple-integer rgb
 		Returns (brightness, color)
+		returned color has one of the rgb channels 0, due to bulb
 
 		Details: The rgb=(50,50,50) is the same bulb appearance as (255,255,255),
 		so also consider brightness and scaling colour values
 		"""
-		# mx = max(color) if max(color) > 0 else 1
 		brightness = max(color) if max(color) > self.brightness else self.brightness
 
-		sf = 255/(max(color))
-		c = [int(sf * c) for c in color]
+		c = to_two_channel(color)
 		return (brightness, c)
 
 	def make_block_img(self, color, b_color):
@@ -197,16 +219,20 @@ class ScreenLight():
 
 			# waiting　if necessary. Dont run loop that often
 			cur_time = time.time()
-			if (cur_time - prev_time) < (1/self.rate):
-				logging.info(f"sleeping {1/self.rate - (cur_time - prev_time)}")
-				time.sleep(1/self.rate - (cur_time - prev_time))
+			# if (cur_time - prev_time) < (1/self.rate):
+			# 	logging.info(f"sleeping {1/self.rate - (cur_time - prev_time)}")
+			# 	time.sleep(1/self.rate - (cur_time - prev_time))
 
+			if self.verbose:
+				await self.print_bulb_info()
+
+			logging.info("Time taken : {:.4f}".format(cur_time - prev_time))
 			prev_time = time.time()
 
 			# display a block of the proposed light color
 			if self.display:
 				img_blk = self.make_block_img(col, r)
-				cv2.imshow("OpenCV/Numpy normal", img_blk)
+				cv2.imshow("Wizscreen - Observed | Bulb", img_blk)
 
 				# Press "q" to quit　in CV window
 				if cv2.waitKey(25) & 0xFF == ord("q"):
@@ -267,7 +293,7 @@ def parse_args():
 	parser.add_argument('-d',
 						'--display',
 						action='store_true',
-						help='Graphically shows the color the light should be')
+						help='Graphically shows the color the light should be. Left image is found dominant color on screen. Right is the color sent to the bulb')
 	return parser.parse_args()
 
 if __name__ == "__main__":
