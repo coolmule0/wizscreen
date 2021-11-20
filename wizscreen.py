@@ -191,8 +191,8 @@ def parse_args():
 									formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 	# Add the arguments
-	parser.add_argument('-d',
-						'--debug',
+	parser.add_argument('-v',
+						'--verbose',
 						action='store_true',
 						help='Prints more verbose messages. Sets to INFO level')
 	parser.add_argument('-s',
