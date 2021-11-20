@@ -15,6 +15,7 @@ click==8.0.3; python_version >= '3.6'
 colorthief==0.2.1
 mss==6.1.0
 numpy==1.21.4
+opencv-python==4.5.3.56
 pillow==8.4.0; python_version >= '3.6'
 pyinstaller-hooks-contrib==2021.3
 pyinstaller==4.7

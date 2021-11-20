@@ -8,7 +8,6 @@ pywizlight = "*"
 mss = "*"
 numpy = "*"
 colorthief = "*"
-opencv-python = "==4.5.3.56"
 
 [dev-packages]
 pyinstaller = "*"

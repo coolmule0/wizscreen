@@ -7,7 +7,6 @@ import argparse
 import math
 import logging
 import sys
-import cv2
 
 import mss
 import mss.tools
@@ -142,17 +141,6 @@ class ScreenLight():
 		c = [int(sf * c) for c in color]
 		return (brightness, c)
 
-	def make_block_img(self, color):
-		"""
-		Creates a small window to display a single color
-		color must be a tuple of RGB
-		"""
-
-		width = height = 512
-		blank_image = np.zeros((height,width,3), np.uint8)
-		blank_image[:]=(0,124,255)[::-1]
-		return blank_image
-
 	async def exec(self):
 		"""
 		Continually run the program
@@ -168,8 +156,6 @@ class ScreenLight():
 		prev_time = 0
 
 		print("Press Ctrl+C to quit out the program")
-		if self.display:
-			print("Press 'q' within the Color Window to quit also")
 		while "Screen capturing":
 
 			col = self.grab_color()
@@ -200,23 +186,13 @@ class ScreenLight():
 
 			prev_time = time.time()
 
-			# display a block of the proposed light color
-			if self.display:
-				img_blk = self.make_block_img(col)
-				cv2.imshow("OpenCV/Numpy normal", img_blk)
-
-				# Press "q" to quit　in CV window
-				if cv2.waitKey(25) & 0xFF == ord("q"):
-					cv2.destroyAllWindows()
-					break
-
 def parse_args():
 	parser = argparse.ArgumentParser(description='Match a Wiz Bulb color to that on screen',
 									formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 	# Add the arguments
-	parser.add_argument('-v',
-						'--verbose',
+	parser.add_argument('-d',
+						'--debug',
 						action='store_true',
 						help='Prints more verbose messages. Sets to INFO level')
 	parser.add_argument('-s',
@@ -261,15 +237,11 @@ def parse_args():
 						type=int,
 						default=600,
 						help='Reduce screencapture width to this amount (pixels). Maintains aspect ratio')
-	parser.add_argument('-d',
-						'--display',
-						action='store_true',
-						help='Graphically shows the color the light should be')
 	return parser.parse_args()
 
 if __name__ == "__main__":
 	args = parse_args()
-	if args.verbose:
+	if args.debug:
 		root = logging.getLogger()
 		root.setLevel(logging.INFO)
 	sl = ScreenLight(**vars(args))
