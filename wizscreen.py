@@ -47,7 +47,7 @@ def to_two_channel(rgb):
 	rgb_2 = tuple([int(c*255) for c in rgb_2f])
 	return rgb_2
 
-def dominant_color(sct_img, quality=3, redu_width=600):
+def dominant_color(sct_img, quality=3):
 	"""
 	Returns the dominant colour in an image
 	Quality: time spent calculating the dominant color
@@ -55,13 +55,9 @@ def dominant_color(sct_img, quality=3, redu_width=600):
 	"""
 	img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
 
-	if redu_width < img.width:
-		sf = redu_width / img.width
-		img = img.resize((redu_width,int(img.height*sf)), Image.ANTIALIAS)
-
-	# Bug in ColorThief library. Cannot have too white an image.
-	# solution: reduce whitest pixels
-	# ...
+	# Bug in ColorThief library. Cannot have too white an image (i.e. all pixel greater than (250, 250, 250))
+	# solution make at least one pixel suitable
+	img.putpixel((0, 0), (255, 0, 0))
 
 	with io.BytesIO() as file_object:
 		img.save(file_object, "PNG")
@@ -139,7 +135,7 @@ class ScreenLight():
 			sct_img = sct.grab(bbox)
 			# mss.tools.to_png(sct_img.rgb, sct_img.size, output="screenshot.png")
 
-			return dominant_color(sct_img, self.quality, self.reduced_width)
+			return dominant_color(sct_img, self.quality)
 	
 	async def print_bulb_info(self):
 		"""
@@ -278,18 +274,14 @@ def parse_args():
 	parser.add_argument('-q',
 						'--quality',
 						type=int,
-						metavar="[1-10]",
+						metavar="[1+]",
 						default=3,
-						help='Quality of dominant color calculation. 1: highest, 10: lowest')
+						help='Quality of dominant color calculation. 1: highest. Larger number performs faster calculation, but less likely to be correct')
 	parser.add_argument('--screen_percent',
 						type=int,
 						metavar="[1-100]",
 						default=60,
 						help='Amount of screen to consider, in percentage. Chances are that things around the edge of the screen do not need consideration')
-	parser.add_argument('--reduced_width',
-						type=int,
-						default=600,
-						help='Reduce screencapture width to this amount (pixels). Maintains aspect ratio. Set to screen width or larger to not reduce during computation.')
 	parser.add_argument('-d',
 						'--display',
 						action='store_true',

@@ -30,4 +30,4 @@ Specify additional command arguments to change default values, or change certain
 |-m MONITOR --monitor MONITOR | 1 | Monitor number to use |
 |-q [1-10], --quality [1-10]| 5 |Quality of dominant color calculation. 1: highest, 10: lowest 
 |--screen_percent [1-100]| 60 |Amount of screen to consider, in percentage. Chances are that things around the edge of the screen do not need consideration |
-|--reduced_width REDUCED_WIDTH| 600 | Reduce screencapture width to this amount (pixels). Maintains aspect ratio |
+|-d, --display| - | Show a window of expected color captured from screen, and sent to bulb |
