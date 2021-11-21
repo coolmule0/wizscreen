@@ -10,19 +10,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-exe:
+  build:
 
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
 
-    - name: Package Application
+    - name: Package Application Windows
       uses: JackMcKew/pyinstaller-action-windows@main
+      with:
+        path: ./
+
+    - name: Package Application Linux
+      uses: JackMcKew/pyinstaller-action-linux@main
       with:
         path: ./
 
     - uses: actions/upload-artifact@v2
       with:
-        name: wizscreen
+        name: wizscreen-windows
         path: ./dist/windows
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: wizscreen-linux
+        path: ./dist/linux
