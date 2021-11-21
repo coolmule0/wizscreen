@@ -4,9 +4,11 @@ Set your Wiz Bulb to match the colors on screen. Finds the dominant on-screen co
 
 ## How to use
 
-### Executalbes
+### Executables
 
 Executables are distributed within this repository for windows and unix-like systems. This is the easiest option to get started quickly.
+
+They can be found in the most recent build by visiting the `Actions` tab, selecting the top most build with a green tick next to the name, and selecting from the `Artifacts` section.
 
 Simply run the executable to start the program. `Ctrl+C` to quit. Run from the command line to specify extra command arguments
 
