@@ -38,13 +38,10 @@ def to_two_channel(rgb):
 	"""
 	Takes rgb and return the nearest color containing a zero in one of the channels. This is format necessary to accurately show colors on the bulb
 	"""
-	rgb_f = [c / 255 for c in rgb]
-	hsv = colorsys.rgb_to_hsv(*rgb_f)
-	# set saturation to max - incorrect way of getting only 2 channels.
-	hsv = (hsv[0], 1, hsv[2])
+	# scale the channels down until one is 0
+	redu_factor = min(rgb)
+	rgb_2 = [c - redu_factor for c in rgb]
 
-	rgb_2f = colorsys.hsv_to_rgb(*hsv)
-	rgb_2 = tuple([int(c*255) for c in rgb_2f])
 	return rgb_2
 
 def dominant_color(sct_img, quality=3):
