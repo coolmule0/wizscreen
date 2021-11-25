@@ -2,28 +2,28 @@ import time
 import asyncio
 import io
 from functools import reduce
-from typing import Any, Callable, ClassVar, Dict, Optional
 import argparse
-import math
+from typing import Tuple
 import logging
-import sys
-import cv2
-import colorsys
 
-import mss
-import mss.tools
+import mss, mss.tools
+from mss import screenshot
 import numpy as np
 from pywizlight import wizlight, PilotBuilder, discovery
 from colorthief import ColorThief
 from PIL import Image
+import cv2
 
-def bgr2rgb(bgr):
+# alias color to tuple
+Color = Tuple[int, int, int]
+
+def bgr2rgb(bgr: np.ndarray) -> np.ndarray:
 	"""
 	Converts bgr arrays (such as opencv) to rgb
 	"""
 	return bgr[::-1]
 
-def average_color(sct_img):
+def average_color(sct_img: screenshot.ScreenShot) -> Color:
 	"""
 	Returns the average colour of an image. 
 	Input image should be a mss screep capture
@@ -34,21 +34,30 @@ def average_color(sct_img):
 	rgb = bgr2rgb(bgr[:3])
 	return tuple([ int(c.item()) for c in rgb])
 
-def to_two_channel(rgb):
+def smoothclamp(x, mi, mx): return mi + (mx-mi)*(lambda t: np.where(t < 0 , 0, np.where( t <= 1 , 3*t**2-2*t**3, 1 ) ) )( (x-mi)/(mx-mi) )
+
+def sigmoid(x,mi, mx): return mi + (mx-mi)*(lambda t: (1+200**(-t+0.5))**(-1) )( (x-mi)/(mx-mi) )
+
+def to_two_channel(rgb: Color) -> Color:
 	"""
 	Takes rgb and return the nearest color containing a zero in one of the channels. This is format necessary to accurately show colors on the bulb
 	"""
+	min_channel = rgb.index(min(rgb))
+
+	# The amount the other channels are affected depends on the value of min
+	redu_factor = smoothclamp(min(rgb), 20, 255) / 255
+
 	# scale the channels down until one is 0
-	redu_factor = min(rgb)
-	rgb_2 = [c - redu_factor for c in rgb]
+	rgb_2 = [round(c - (min(rgb)*redu_factor)) for c in rgb]
+	rgb_2[min_channel] = 0
 
 	return rgb_2
 
-def dominant_color(sct_img, quality=3):
+def dominant_color(sct_img: screenshot.ScreenShot, quality:int=3) -> Color:
 	"""
 	Returns the dominant colour in an image
 	Quality: time spent calculating the dominant color
-	Redu_width: reduce the width of the screenshot to this. 0 or less means no reduction
+	redu_width: reduce the width of the screenshot to this. 0 or less, or larger than current size means no reduction
 	"""
 	img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
 
@@ -63,7 +72,7 @@ def dominant_color(sct_img, quality=3):
 
 	return col
 	 
-def similar(col1, col2):
+def similar(col1: Color, col2: Color):
 	"""
 	Are two colors similar?
 	"""
@@ -85,7 +94,7 @@ class ScreenLight():
 		self.__dict__.update(kwargs)
 
 
-	async def search_bulbs(self):
+	async def search_bulbs(self) -> None:
 		"""
 		Find any bulbs on the broadcast space
 		"""
@@ -96,7 +105,7 @@ class ScreenLight():
 			print(bulb.__dict__)
 
 
-	async def init_bulb(self):
+	async def init_bulb(self)-> None:
 		"""
 		Find and use relevant bulb
 		"""
@@ -113,7 +122,7 @@ class ScreenLight():
 
 		self.light = wizlight(self.ip)
 
-	def grab_color(self):
+	def grab_color(self) -> Color:
 		"""
 		return float rgb average of screen 
 		"""
@@ -121,12 +130,12 @@ class ScreenLight():
 			monitor = sct.monitors[self.monitor]
 
 			# Capture a bbox using percent values
-			len_factor = math.sqrt(self.screen_percent)
-			border = int((100 - len_factor)/2)
+			# len_factor = math.sqrt(self.screen_percent)
+			border = int((100 - self.screen_percent)/2)
 			left = monitor["left"] + monitor["width"] * border // 100
 			top = monitor["top"] + monitor["height"] * border // 100  
-			right = monitor["width"] * 1-(border // 100)
-			lower = monitor["height"] * 1-(border // 100)
+			right = monitor["width"] - monitor["width"] * border // 100
+			lower = monitor["height"] - monitor["height"] * border // 100  
 			bbox = (left, top, right, lower)
 			
 			sct_img = sct.grab(bbox)
@@ -134,7 +143,7 @@ class ScreenLight():
 
 			return dominant_color(sct_img, self.quality)
 	
-	async def print_bulb_info(self):
+	async def print_bulb_info(self) -> None:
 		"""
 		Queries the bulb to obtain information from it
 		"""
@@ -146,7 +155,7 @@ class ScreenLight():
 			(self.b_red, self.b_blue, self.b_green, self.b_brightness) = (red, green, blue, brightness)
 
 
-	def bulb_scale(self, color):
+	def bulb_scale(self, color: Color) -> Tuple[int, Color]:
 		"""
 		Map colour to brightness and colour
 		Input of tuple-integer rgb
@@ -161,7 +170,7 @@ class ScreenLight():
 		c = to_two_channel(color)
 		return (brightness, c)
 
-	def make_block_img(self, color, b_color):
+	def make_block_img(self, color: Color, b_color: Color) -> np.ndarray:
 		"""
 		Creates a small window to display a 2 - single colors
 		color and b_color must be a tuple of RGB
@@ -174,7 +183,7 @@ class ScreenLight():
 
 		return blank_image
 
-	async def exec(self):
+	async def exec(self) -> None:
 		"""
 		Continually run the program
 		"""
@@ -273,11 +282,11 @@ def parse_args():
 						type=int,
 						metavar="[1+]",
 						default=3,
-						help='Quality of dominant color calculation. 1: highest. Larger number performs faster calculation, but less likely to be correct')
+						help='Quality of dominant color calculation. 1: highest. Larger number performs faster calculation, but less likely to be correct. Use larger values for faster response')
 	parser.add_argument('--screen_percent',
 						type=int,
 						metavar="[1-100]",
-						default=60,
+						default=80,
 						help='Amount of screen to consider, in percentage. Chances are that things around the edge of the screen do not need consideration')
 	parser.add_argument('-d',
 						'--display',
